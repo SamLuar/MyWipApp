@@ -1,0 +1,94 @@
+body{ font-family: Arial, sans-serif; background:#f5f5f5; color:#222; transition:background 0.2s ease, color 0.2s ease; }
+body.dark-mode{ background:#121720; color:#e8edf5; }
+.container{ max-width:1000px; margin:24px auto; background:white; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,0.06); transition:background 0.2s ease, color 0.2s ease; }
+body.dark-mode .container{ background:#1b2330; box-shadow:0 2px 12px rgba(0,0,0,0.35); }
+body.dark-mode .card,
+body.dark-mode .accordion,
+body.dark-mode .accordion-toggle,
+body.dark-mode .proj-card,
+body.dark-mode .modal .modal-content,
+body.dark-mode .detail-fields .field,
+body.dark-mode .icon-home-btn,
+body.dark-mode .category-nav button,
+body.dark-mode #add-project-btn,
+body.dark-mode button:not(.icon-btn):not(.theme-toggle){ background:#243041; color:#e8edf5; border-color:#3a485d; }
+body.dark-mode input,
+body.dark-mode textarea,
+body.dark-mode select,
+body.dark-mode .icon-home-btn,
+body.dark-mode button{ color:#e8edf5; background:#1d2735; border-color:#3a485d; }
+body.dark-mode .accordion-toggle{ background:#1d2735; }
+body.dark-mode .accordion-toggle:hover{ background:#243041; }
+body.dark-mode .card{ border-color:#3a485d; }
+body.dark-mode .detail-fields .field{ background:#17202b; border-left-color:#8ab4ff; }
+body.dark-mode .detail-fields .field strong{ color:#8ab4ff; }
+.hours-section table thead th{ background:#f0f0f0; color:#111827; }
+body.dark-mode .hours-section table thead th{ background:#111827; color:#e8edf5; }
+body.dark-mode .hours-section table td{ color:#e8edf5; }
+body.dark-mode .hours-section table tr{ border-color:#3a485d; }
+body.dark-mode .icon-btn{ color:#e8edf5; }
+body.dark-mode .icon-btn:hover{ background:#273548; }
+h1{ margin:0 }
+.topbar{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px }
+#main-nav button{ margin-left:8px }
+.theme-toggle{ position:fixed; top:18px; right:18px; z-index:20; width:42px; height:42px; border-radius:50%; border:1px solid #ddd; background:#fff; cursor:pointer; font-size:1.2rem; box-shadow:0 4px 12px rgba(0,0,0,0.12); }
+body.dark-mode .theme-toggle{ background:#1d2735; color:#f6d365; border-color:#3a485d; }
+.cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:12px }
+.card{ background:#fff; border:1px solid #eee; border-radius:6px; overflow:hidden; cursor:pointer; text-align:center; padding-bottom:12px }
+.card img{ width:100%; height:140px; object-fit:cover; display:block }
+.card h3{ margin:8px 0 }
+
+.category-banner{ position:relative; height:200px; border-radius:12px; background-size:cover; background-position:center; margin-bottom:12px; border:1px solid #eee; overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
+.category-banner::before{ content:""; position:absolute; inset:0; background:linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.28)); }
+.category-banner-overlay{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:1; }
+#category-banner-title{ position:relative; z-index:2; color:#fff; font-size:1.7rem; font-weight:600; text-shadow:0 3px 8px rgba(0,0,0,0.7); letter-spacing:0.01em; text-transform:none; }
+.category-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px }
+.category-header h2{ display:none }
+.category-nav{ display:flex; align-items:center; justify-content:center; flex:1; gap:6px }
+.category-nav button{ margin-left:0 }
+.icon-home-btn{ width:38px; height:38px; border:1px solid #ddd; border-radius:50%; background:#fff; font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.icon-home-btn:hover{ background:#f5f5f5 }
+
+.accordions .accordion{ border:1px solid #eee; border-radius:6px; margin-bottom:8px; overflow:hidden }
+.accordion-toggle{ width:100%; text-align:left; padding:10px 12px; background:#fafafa; border:0; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:8px; transition:all 0.2s }
+.accordion-toggle:hover{ background:#efefef }
+.accordion-icon{ display:inline-block; width:20px; text-align:center; font-weight:bold; font-size:1.1em; margin-left:auto }
+.accordion-count{ background:#0064c8; color:white; padding:2px 8px; border-radius:12px; font-size:0.85em; font-weight:normal }
+.accordion-body{ padding:12px; display:flex; gap:12px; flex-wrap:wrap }
+.accordion.collapsed .accordion-body{ display:none }
+
+.proj-card{ width:200px; border:1px solid #ddd; border-radius:6px; overflow:hidden; cursor:pointer; background:#fff; display:flex; flex-direction:column }
+.proj-card img.proj-img{ width:100%; height:110px; object-fit:cover }
+.proj-card h3{ margin:8px; font-size:1em }
+.proj-completion{ background:rgba(0,100,200,0.8); color:white; padding:4px 8px; margin:0 8px 8px 8px; border-radius:4px; font-weight:bold; font-size:0.9em; text-align:center }
+
+.modal{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.4); z-index:1000; }
+.hidden{ display:none }
+.modal.hidden{ display:none }
+.modal .modal-content{ background:#fff; padding:16px; border-radius:6px; max-width:90%; max-height:90%; overflow:auto; position:relative; z-index:1001; }
+#detail-modal .modal-content{ max-width:600px; width:600px }
+.detail-header{ display:flex; justify-content:flex-end; gap:8px; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid #eee }
+.icon-btn{ background:none; border:none; font-size:1.5em; cursor:pointer; padding:4px 8px; border-radius:4px; transition:background 0.2s }
+.icon-btn:hover{ background:#f0f0f0 }
+.detail-img{ width:100%; max-height:400px; object-fit:contain; margin:10px 0; border-radius:4px }
+.detail-fields{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:16px 0 }
+.detail-fields .field{ padding:8px; background:#f9f9f9; border-radius:4px; border-left:3px solid #0064c8 }
+.detail-fields .field strong{ color:#0064c8 }
+.detail-actions{ display:flex; gap:8px; margin-top:16px }
+.detail-actions button{ padding:8px 16px; cursor:pointer; border:1px solid #ddd; border-radius:4px; background:#fff }
+.detail-actions button:hover{ background:#f0f0f0 }
+.hours-section{ margin-top:20px; padding-top:20px; border-top:2px solid #eee }
+.hours-section h3{ margin-bottom:10px }
+.hours-section table{ width:100%; border-collapse:collapse; margin-bottom:10px }
+.hours-section table tr{ border-bottom:1px solid #eee }
+.hours-section table th, .hours-section table td{ padding:8px; text-align:left }
+.hours-section table thead{ background:#f0f0f0; font-weight:bold }
+.hours-section button{ padding:8px 16px; background:#0064c8; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold }
+.hours-section button:hover{ background:#0050a0 }
+
+.form.modal .modal-content{ width:520px }
+
+label{ display:block; margin:8px 0 }
+input, textarea, select{ width:100%; padding:8px; box-sizing:border-box }
+.actions{ margin-top:10px }
+.actions button{ margin-right:8px }

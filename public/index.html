@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My WIP App</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <button id="theme-toggle" class="theme-toggle" title="Alternar tema">☀️</button>
+  <div class="container">
+    <header class="topbar">
+      <h1>My WIP App</h1>
+      <nav id="main-nav"></nav>
+    </header>
+
+    <main>
+      <section id="home" class="view">
+        <h2>Categorias</h2>
+        <div class="cards">
+          <div class="card" data-category="Ponto Cruz">
+            <img src="https://i.pinimg.com/1200x/32/6c/fe/326cfeda5ac0cb0927aa8ce84aeda706.jpg" alt="Ponto Cruz">
+            <h3>Ponto Cruz</h3>
+          </div>
+          <div class="card" data-category="Diamond Painting">
+            <img src="https://www.lastijerasmagicas.com/72333-large_default/kit-de-diamond-painting-tarjeta-de-felicitacion-baby-unicorn-diamond-dotz.jpg" alt="Diamond Painting">
+            <h3>Diamond Painting</h3>
+          </div>
+          <div class="card" data-category="Patterns">
+            <img src="https://i.pinimg.com/736x/63/16/4e/63164e3e3b997ed62f60d63a964e2cb7.jpg" alt="Patterns">
+            <h3>Patterns</h3>
+          </div>
+          <div class="card" data-category="Outros">
+            <img src="https://i.pinimg.com/736x/e6/64/5c/e6645c8e36214faeaebdd71d3d100b47.jpg" alt="Outros">
+            <h3>Outros</h3>
+          </div>
+        </div>
+      </section>
+
+      <section id="category-view" class="view hidden">
+        <div id="category-banner" class="category-banner" aria-label="Banner da categoria">
+          <div class="category-banner-overlay">
+            <span id="category-banner-title">Categoria</span>
+          </div>
+        </div>
+        <div class="category-header">
+          <button id="back-home" class="icon-home-btn" title="Home">⌂</button>
+          <h2 id="category-title" class="hidden">Categoria</h2>
+          <div id="category-nav" class="category-nav"></div>
+          <button id="add-project-btn">+ Novo</button>
+        </div>
+
+        <div class="accordions">
+          <div class="accordion" data-status="Planned">
+            <button class="accordion-toggle">Em Espera</button>
+            <div class="accordion-body" id="status-Planned"></div>
+          </div>
+          <div class="accordion" data-status="In Progress">
+            <button class="accordion-toggle">Em Progresso</button>
+            <div class="accordion-body" id="status-In-Progress"></div>
+          </div>
+          <div class="accordion" data-status="Done">
+            <button class="accordion-toggle">Terminado</button>
+            <div class="accordion-body" id="status-Done"></div>
+          </div>
+          <div class="accordion" data-status="Cancelled">
+            <button class="accordion-toggle">Cancelado</button>
+            <div class="accordion-body" id="status-Cancelled"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- hidden form (reused) -->
+    <section class="form modal hidden" id="project-form-modal">
+      <div class="modal-content">
+        <h2 id="form-title">Novo Projecto</h2>
+        <form id="project-form">
+          <input type="hidden" id="project-id">
+          <label>Título<br><input id="title" required></label>
+          <label>Descrição<br><textarea id="description"></textarea></label>
+          <label>Categoria<br>
+            <select id="category">
+              <option>Ponto Cruz</option>
+              <option>Diamond Painting</option>
+              <option>Patterns</option>
+              <option>Outros</option>
+            </select>
+          </label>
+          <label>Imagem URL<br><input id="image"></label>
+          <label>Estado<br>
+            <select id="status">
+              <option>Planned</option>
+              <option>In Progress</option>
+              <option>Done</option>
+              <option>Cancelled</option>
+            </select>
+          </label>
+          
+          <fieldset style="border:1px solid #ddd; padding:10px; margin:10px 0; border-radius:4px">
+            <legend>Detalhes</legend>
+            <label>Número de Pontos/Diamonds<br><input type="number" id="numPoints"></label>
+            <label>Medidas (AltxLarg em cm)<br><input id="dimensionsCm" placeholder="ex: 30x40"></label>
+            <label>Tamanho em Pontos (AltxLarg)<br><input id="dimensionsPoints" placeholder="ex: 300x400"></label>
+            <label>Número de Cores<br><input type="number" id="numColors"></label>
+          </fieldset>
+          
+          <fieldset style="border:1px solid #ddd; padding:10px; margin:10px 0; border-radius:4px">
+            <legend>Datas</legend>
+            <label>Data de Aquisição<br><input type="date" id="acquisitionDate"></label>
+            <label>Data Início<br><input type="date" id="startDate"></label>
+            <label>Data Fim<br><input type="date" id="endDate"></label>
+          </fieldset>
+          
+          <fieldset style="border:1px solid #ddd; padding:10px; margin:10px 0; border-radius:4px">
+            <legend>Progresso e Custos</legend>
+            <label>% de Conclusão<br><input type="number" id="completion" min="0" max="100" value="0"></label>
+            <label>Materiais (€)<br><input type="number" id="costs-materials" min="0" step="0.01" placeholder="0.00"></label>
+            <label>Transporte (€)<br><input type="number" id="costs-transport" min="0" step="0.01" placeholder="0.00"></label>
+            <label>Moldura (€)<br><input type="number" id="costs-frame" min="0" step="0.01" placeholder="0.00"></label>
+            <label>Outros (€)<br><input type="number" id="costs-other" min="0" step="0.01" placeholder="0.00"></label>
+            <label>Para Venda<br>
+              <select id="forSale">
+                <option value="false">Não</option>
+                <option value="true">Sim</option>
+              </select>
+            </label>
+          </fieldset>
+
+          <fieldset id="notes-field" class="hidden" style="border:1px solid #ddd; padding:10px; margin:10px 0; border-radius:4px">
+            <legend>Notas</legend>
+            <label>Notas do projecto<br><textarea id="notes" rows="4" placeholder="Adicionar observações para este projeto de Outros..."></textarea></label>
+          </fieldset>
+          
+          <div class="actions">
+            <button type="submit">Guardar</button>
+            <button type="button" id="cancel">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- project detail modal -->
+    <div id="detail-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="detail-header">
+          <button id="detail-edit-btn" class="icon-btn" title="Editar">✎</button>
+          <button id="detail-delete-btn" class="icon-btn" title="Eliminar">🗑️</button>
+          <button id="detail-close" class="icon-btn" title="Fechar">✕</button>
+        </div>
+        <div id="detail-body"></div>
+      </div>
+    </div>
+
+    <!-- hour logging modal -->
+    <div id="hour-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="detail-header">
+          <h2 id="hour-modal-title">Registo de Horas</h2>
+          <button id="hour-close" class="icon-btn" title="Fechar">✕</button>
+        </div>
+        
+        <form id="hour-form">
+          <input type="hidden" id="hour-id">
+          <input type="hidden" id="hour-project-id">
+          <input type="hidden" id="hour-category">
+          
+          <label>Data<br><input type="date" id="hour-date" required></label>
+          <label>Hora de Início<br><input type="time" id="hour-start-time" required></label>
+          <label>Duração (minutos)<br><input type="number" id="hour-duration" min="1" required></label>
+          <label>Pontos Feitos<br><input type="number" id="hour-points-done" min="0" required></label>
+          
+          <div class="actions">
+            <button type="submit">Guardar</button>
+            <button type="button" id="hour-cancel">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "Patterns": {
+    "013": [
+      {
+        "id": "1786835786668",
+        "date": "2026-08-10",
+        "startTime": "11:30",
+        "duration": 120,
+        "pointsDone": 1488,
+        "totalPoints": 1488,
+        "percentage": 13
+      },
+      {
+        "id": "1786889116065",
+        "date": "2026-08-16",
+        "startTime": "13:20",
+        "duration": 95,
+        "pointsDone": 1488,
+        "totalPoints": 2976,
+        "percentage": 25
+      }
+    ]
+  }
+}

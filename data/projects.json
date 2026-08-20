@@ -1,0 +1,44 @@
+[
+  {
+    "id": "1786798792613",
+    "title": "DD6.029 Green Eyed Beauty",
+    "description": "Gato laranja de olhos verdes by DOTZ",
+    "category": "Diamond Painting",
+    "image": "https://eu.diamonddotz.com/image/cache/catalog/products/main/dd6/dd6.029-1600x1600.jpg",
+    "status": "Planned",
+    "startDate": null,
+    "endDate": null,
+    "numPoints": "11904",
+    "dimensionsCm": "27 x 35 cm",
+    "dimensionsPoints": "96 x 124",
+    "numColors": "31",
+    "acquisitionDate": null,
+    "completion": 0,
+    "costs": null,
+    "forSale": false
+  },
+  {
+    "id": "013",
+    "title": "DD6.029 Green Eyed Beauty",
+    "description": "Gato laranja de olhos verdes by DOTZ",
+    "category": "Patterns",
+    "image": "https://eu.diamonddotz.com/image/cache/catalog/products/main/dd6/dd6.029-1600x1600.jpg",
+    "status": "In Progress",
+    "startDate": "2026-08-10",
+    "endDate": null,
+    "numPoints": "11904",
+    "dimensionsCm": null,
+    "dimensionsPoints": "96 x 124",
+    "numColors": "31",
+    "acquisitionDate": null,
+    "completion": 25,
+    "costs": {
+      "materiais": 1,
+      "transporte": 0,
+      "moldura": 0,
+      "outros": 0
+    },
+    "forSale": false,
+    "notes": ""
+  }
+]
