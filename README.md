@@ -10,10 +10,11 @@ Instalação e execução:
 ```bash
 npm install
 npm start
-# abrir http://localhost:3000
+# abrir http://localhost:3300
 ```
 
 Funcionalidades:
 - Listar projectos
 - Adicionar, editar e eliminar projectos
+- Adicionar, editar e eliminar sessões de trabalho/Registo de horas por projeto
 - Dados persistem em `data/projects.json`
