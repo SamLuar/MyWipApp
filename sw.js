@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mywipapp-cache-v1';
+const CACHE_NAME = 'mywipapp-cache-v2';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -10,7 +10,7 @@ const ASSETS_TO_CACHE = [
   './manifest.json'
 ];
 
-//Instalação:
+// Instalação:
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -20,81 +20,103 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-//Ativação
+// Ativação: limpar caches antigas
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
-        return Promise.all(
-            keys.filter(key => key !== CACHE_NAME).map((key) => caches.delete(key))
-        );
+      return Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+      );
     })
   );
   self.clients.claim();
 });
 
-//pedidos
+// Pedidos:
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // 1. Intercepta a rota de API de projetos (ex: api/project/1 ou api/projects)
-  if (url.pathname.includes('/api/projects')) {
+  // 1. Intercepta a rota GET de API de projetos (ex: /api/projects ou /api/projects/:id)
+  if (url.pathname.includes('/api/projects') && event.request.method === 'GET') {
     event.respondWith(
-      caches.match('./data/projects.json').then(async (response) => {
-        // Se não estiver em cache, procura no servidor estático
-        const res = response || await fetch('./data/projects.json');
-        const projects = await res.json();
+      (async () => {
+        try {
+          const networkRes = await fetch(event.request);
+          if (networkRes.ok) return networkRes;
+        } catch (_) {}
 
-        // Extrai o ID do URL se existir (ex: /api/project/123)
-        const pathParts = url.pathname.split('/');
-        const projectId = pathParts[pathParts.length - 1];
+        try {
+          const cachedResponse = await caches.match('./data/projects.json');
+          const res = cachedResponse || await fetch('./data/projects.json');
+          const projects = await res.json();
 
-        // Se o último segmento for um número/ID, filtra o projeto específico
-        if (projectId && !isNaN(projectId)) {
-          const project = projects.find((p) => p.id == projectId);
-          return new Response(JSON.stringify(project || {}), {
+          const pathParts = url.pathname.split('/');
+          const projectId = pathParts[pathParts.length - 1];
+
+          if (projectId && projectId !== 'projects' && !isNaN(projectId)) {
+            const project = projects.find((p) => p.id == projectId);
+            return new Response(JSON.stringify(project || {}), {
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+
+          return new Response(JSON.stringify(projects), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (err) {
+          return new Response('[]', {
             headers: { 'Content-Type': 'application/json' }
           });
         }
-
-        // Se for uma busca geral (/api/projects), devolve a lista completa
-        return new Response(JSON.stringify(projects), {
-          headers: { 'Content-Type': 'application/json' }
-        });
-      })
+      })()
     );
     return;
   }
-  
-  // 2. Intercepta a rota de API de horas (ex: api/hours)
-  if (url.pathname.includes('/api/hours')) {
+
+  // 2. Intercepta a rota GET de API de horas (ex: /api/hours ou /api/hours/:projectId)
+  if (url.pathname.includes('/api/hours') && event.request.method === 'GET') {
     event.respondWith(
-      caches.match('./data/hours.json').then(async (response) => {
-        const res = response || await fetch('./data/hours.json');
-        const hours = await res.json();
-        const projectHours = [];
+      (async () => {
+        try {
+          const networkRes = await fetch(event.request);
+          if (networkRes.ok) return networkRes;
+        } catch (_) {}
 
-        // Extrai o ID do URL se existir (ex: /api/hours/123)
-        const pathParts = url.pathname.split('/');
-        const projectId = pathParts[pathParts.length - 1];
-        
-        for (const category in hours) {
-          if (hours[category][projectId]) {
-            projectHours.push(...hours[category][projectId]);
+        try {
+          const cachedResponse = await caches.match('./data/hours.json');
+          const res = cachedResponse || await fetch('./data/hours.json');
+          const hours = await res.json();
+          const projectHours = [];
+
+          const pathParts = url.pathname.split('/');
+          const projectId = pathParts[pathParts.length - 1];
+
+          for (const category in hours) {
+            if (hours[category][projectId]) {
+              projectHours.push(...hours[category][projectId]);
+            }
           }
+
+          return new Response(JSON.stringify(projectHours), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (err) {
+          return new Response('[]', {
+            headers: { 'Content-Type': 'application/json' }
+          });
         }
-        res.json(projectHours);
-      })
+      })()
     );
     return;
   }
 
-  // 3. Para todos os outros ficheiros (HTML, CSS, JS, Imagens)
+  // 3. Para todos os outros ficheiros: Cache First com Network Fallback
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-        if (cachedResponse) {
-            return cachedResponse;
-        }
-        return fetch(event.request);
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return fetch(event.request);
     })
   );
 });

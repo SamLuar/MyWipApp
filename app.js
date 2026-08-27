@@ -1,7 +1,10 @@
 const apiBase = '/api/projects';
+const hoursApiBase = '/api/hours';
+const STORAGE_PROJECTS_KEY = 'wip-projects';
+const STORAGE_HOURS_KEY = 'wip-hours';
 let currentCategory = null;
 
-const CATEGORIES = ['Ponto Cruz','Diamond Painting','Patterns','Outros'];
+const CATEGORIES = ['Ponto Cruz', 'Diamond Painting', 'Patterns', 'Outros'];
 const CATEGORY_IMAGES = {
   'Ponto Cruz': 'https://i.pinimg.com/1200x/32/6c/fe/326cfeda5ac0cb0927aa8ce84aeda706.jpg',
   'Diamond Painting': 'https://www.lastijerasmagicas.com/72333-large_default/kit-de-diamond-painting-tarjeta-de-felicitacion-baby-unicorn-diamond-dotz.jpg',
@@ -15,12 +18,162 @@ const STATUS_LABELS = {
   'Cancelled': 'Cancelado'
 };
 
-async function fetchProjects(){
-  const res = await fetch(apiBase);
-  return res.json();
+function el(tag, cls){
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  return e;
 }
 
-function el(tag, cls){ const e = document.createElement(tag); if(cls) e.className = cls; return e; }
+// Data helpers for local persistence and fallback
+async function loadInitialProjectsFromFile() {
+  try {
+    const res = await fetch('./data/projects.json');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) return data;
+    }
+  } catch (e) {
+    console.warn('Could not load ./data/projects.json:', e);
+  }
+  return [];
+}
+
+async function loadInitialHoursFromFile() {
+  try {
+    const res = await fetch('./data/hours.json');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === 'object') return data;
+    }
+  } catch (e) {
+    console.warn('Could not load ./data/hours.json:', e);
+  }
+  return {};
+}
+
+function getLocalProjects() {
+  try {
+    const raw = localStorage.getItem(STORAGE_PROJECTS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error('Error reading localStorage projects:', e);
+  }
+  return null;
+}
+
+function setLocalProjects(projects) {
+  try {
+    localStorage.setItem(STORAGE_PROJECTS_KEY, JSON.stringify(projects));
+  } catch (e) {
+    console.error('Error saving projects to localStorage:', e);
+  }
+}
+
+function getLocalHours() {
+  try {
+    const raw = localStorage.getItem(STORAGE_HOURS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch (e) {
+    console.error('Error reading localStorage hours:', e);
+  }
+  return null;
+}
+
+function setLocalHours(hours) {
+  try {
+    localStorage.setItem(STORAGE_HOURS_KEY, JSON.stringify(hours));
+  } catch (e) {
+    console.error('Error saving hours to localStorage:', e);
+  }
+}
+
+async function fetchProjects() {
+  // 1. Tentar API backend
+  try {
+    const res = await fetch(apiBase);
+    if (res.ok) {
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setLocalProjects(data);
+          return data;
+        }
+      }
+    }
+  } catch (err) {
+    console.info('API backend indisponível, a usar dados locais.');
+  }
+
+  // 2. Tentar localStorage
+  const localData = getLocalProjects();
+  if (localData !== null) {
+    return localData;
+  }
+
+  // 3. Fallback inicial para data/projects.json
+  const fileData = await loadInitialProjectsFromFile();
+  setLocalProjects(fileData);
+  return fileData;
+}
+
+async function saveProject(data, id) {
+  let projects = await fetchProjects();
+  if (id) {
+    const idx = projects.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      projects[idx] = { ...projects[idx], ...data, id };
+    } else {
+      projects.push({ ...data, id });
+    }
+  } else {
+    const newProject = {
+      ...data,
+      id: Date.now().toString(),
+      hourLog: []
+    };
+    projects.push(newProject);
+  }
+  setLocalProjects(projects);
+
+  try {
+    if (id) {
+      await fetch(`${apiBase}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    } else {
+      await fetch(apiBase, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    }
+  } catch (e) {
+    console.info('Sincronização com a API ignorada (modo offline/standalone).');
+  }
+}
+
+async function removeProject(id) {
+  let projects = await fetchProjects();
+  projects = projects.filter(p => p.id !== id);
+  setLocalProjects(projects);
+
+  try {
+    await fetch(`${apiBase}/${id}`, { method: 'DELETE' });
+  } catch (e) {
+    console.info('Eliminação na API ignorada (modo offline/standalone).');
+  }
+
+  if (currentCategory) navigateToCategory(currentCategory);
+}
 
 function showHome(){
   currentCategory = null;
@@ -44,25 +197,27 @@ function showCategoryView(category, projects){
   if (bannerTitle) {
     bannerTitle.textContent = category;
   }
-  renderCategoryNav();
-  renderAccordions(category, projects);
+  renderCategoryNav(category);
+  renderAccordions(category, Array.isArray(projects) ? projects : []);
 }
 
-function renderCategoryNav(){
+function renderCategoryNav(current){
   const nav = document.getElementById('category-nav');
   nav.innerHTML = '';
-  CATEGORIES.forEach(c => {
-    const b = el('button'); b.textContent = c; b.onclick = () => navigateToCategory(c);
+  CATEGORIES.filter(c => c !== current).forEach(c => {
+    const b = el('button');
+    b.textContent = c;
+    b.onclick = () => navigateToCategory(c);
     nav.appendChild(b);
   });
 }
 
 function renderAccordions(category, projects){
-  // group by status
+  // Agrupar projetos por estado
   const grouped = { 'Planned': [], 'In Progress': [], 'Done': [], 'Cancelled': [] };
-  projects.filter(p => (p.category || '') === category).forEach(p => {
+  (Array.isArray(projects) ? projects : []).filter(p => (p.category || '') === category).forEach(p => {
     const s = p.status || 'Planned';
-    if(!grouped[s]) grouped[s] = [];
+    if (!grouped[s]) grouped[s] = [];
     grouped[s].push(p);
   });
 
@@ -74,9 +229,19 @@ function renderAccordions(category, projects){
   Object.keys(grouped).forEach(status => {
     const id = 'status-' + status.replace(/\s+/g,'-');
     const container = document.getElementById(id);
-    if(!container) return;
+    if (!container) return;
     container.innerHTML = '';
-    grouped[status].forEach(p => container.appendChild(renderProjectCard(p)));
+    
+    if (grouped[status].length === 0) {
+      const emptyMsg = el('p', 'empty-status-msg');
+      emptyMsg.textContent = 'Sem projetos neste estado';
+      emptyMsg.style.color = '#888';
+      emptyMsg.style.fontStyle = 'italic';
+      emptyMsg.style.padding = '8px';
+      container.appendChild(emptyMsg);
+    } else {
+      grouped[status].forEach(p => container.appendChild(renderProjectCard(p)));
+    }
 
     const accordion = container.parentElement;
     const btn = accordion.querySelector('.accordion-toggle');
@@ -88,17 +253,18 @@ function renderAccordions(category, projects){
     btn.innerHTML = `<span class="accordion-count">(${count})</span> ${statusLabel} <span class="accordion-icon">${icon}</span>`;
   });
 
-  // set up accordion toggles
+  // Configurar toggles dos accordions
   document.querySelectorAll('.accordion-toggle').forEach(btn => {
     btn.onclick = () => {
       const accordion = btn.parentElement;
       accordion.classList.toggle('collapsed');
-      // Update icon
       const isCollapsed = accordion.classList.contains('collapsed');
       const icon = isCollapsed ? '▶' : '▼';
       const countSpan = btn.querySelector('.accordion-count');
-      const statusLabel = btn.textContent.replace(/▼|▶/, '').replace(countSpan.textContent, '').trim();
-      btn.innerHTML = `${countSpan.outerHTML} ${statusLabel} <span class="accordion-icon">${icon}</span>`;
+      const status = accordion.dataset.status;
+      const statusLabel = STATUS_LABELS[status] || status || 'Estado';
+      const countHTML = countSpan ? countSpan.outerHTML : '';
+      btn.innerHTML = `${countHTML} ${statusLabel} <span class="accordion-icon">${icon}</span>`;
     };
   });
 }
@@ -107,8 +273,9 @@ function renderProjectCard(p){
   const card = el('div','proj-card');
   const img = el('img','proj-img');
   img.src = p.image || 'https://via.placeholder.com/240x160?text=Sem+Imagem';
-  img.alt = p.title;
-  const title = el('h3'); title.textContent = p.title;
+  img.alt = p.title || 'Projeto';
+  const title = el('h3');
+  title.textContent = p.title || 'Sem Título';
   const completion = el('div','proj-completion');
   completion.textContent = `${p.completion || 0}%`;
   card.appendChild(img);
@@ -124,7 +291,8 @@ function showDetails(p){
   body.innerHTML = '';
   
   // Título
-  const title = el('h2'); title.textContent = p.title;
+  const title = el('h2');
+  title.textContent = p.title;
   body.appendChild(title);
   
   // Imagem
@@ -134,8 +302,9 @@ function showDetails(p){
   body.appendChild(img);
   
   // Descrição
-  if(p.description) {
-    const desc = el('p'); desc.textContent = p.description;
+  if (p.description) {
+    const desc = el('p');
+    desc.textContent = p.description;
     body.appendChild(desc);
   }
 
@@ -148,57 +317,57 @@ function showDetails(p){
   // Detalhes em grid
   const details = el('div','detail-fields');
   
-  if(p.category) {
+  if (p.category) {
     const field = el('div','field');
     field.innerHTML = `<strong>Categoria:</strong> ${p.category}`;
     details.appendChild(field);
   }
-  if(p.status) {
+  if (p.status) {
     const field = el('div','field');
     field.innerHTML = `<strong>Estado:</strong> ${STATUS_LABELS[p.status] || p.status}`;
     details.appendChild(field);
   }
-  if(p.numPoints) {
+  if (p.numPoints) {
     const field = el('div','field');
     field.innerHTML = `<strong>Pontos/Diamonds:</strong> ${p.numPoints}`;
     details.appendChild(field);
   }
-  if(p.dimensionsCm) {
+  if (p.dimensionsCm) {
     const field = el('div','field');
     field.innerHTML = `<strong>Medidas:</strong> ${p.dimensionsCm} cm`;
     details.appendChild(field);
   }
-  if(p.dimensionsPoints) {
+  if (p.dimensionsPoints) {
     const field = el('div','field');
     field.innerHTML = `<strong>Tamanho (pontos):</strong> ${p.dimensionsPoints}`;
     details.appendChild(field);
   }
-  if(p.numColors) {
+  if (p.numColors) {
     const field = el('div','field');
     field.innerHTML = `<strong>Cores:</strong> ${p.numColors}`;
     details.appendChild(field);
   }
-  if(p.acquisitionDate) {
+  if (p.acquisitionDate) {
     const field = el('div','field');
     field.innerHTML = `<strong>Data Aquisição:</strong> ${p.acquisitionDate}`;
     details.appendChild(field);
   }
-  if(p.startDate) {
+  if (p.startDate) {
     const field = el('div','field');
     field.innerHTML = `<strong>Data Início:</strong> ${p.startDate}`;
     details.appendChild(field);
   }
-  if(p.endDate) {
+  if (p.endDate) {
     const field = el('div','field');
     field.innerHTML = `<strong>Data Fim:</strong> ${p.endDate}`;
     details.appendChild(field);
   }
-  if(p.completion !== undefined && p.completion !== null) {
+  if (p.completion !== undefined && p.completion !== null) {
     const field = el('div','field');
     field.innerHTML = `<strong>Conclusão:</strong> ${p.completion}%`;
     details.appendChild(field);
   }
-  if(p.costs && typeof p.costs === 'object') {
+  if (p.costs && typeof p.costs === 'object') {
     const field = el('div','field');
     const costs = p.costs;
     const items = [
@@ -207,11 +376,11 @@ function showDetails(p){
       costs.moldura !== undefined ? `Moldura: ${Number(costs.moldura).toFixed(2)} €` : null,
       costs.outros !== undefined ? `Outros: ${Number(costs.outros).toFixed(2)} €` : null
     ].filter(Boolean).join('<br>');
-    const totalCost = costs.materiais + costs.transporte + costs.moldura + costs.outros;
+    const totalCost = (costs.materiais || 0) + (costs.transporte || 0) + (costs.moldura || 0) + (costs.outros || 0);
     field.innerHTML = `<strong>Custos: ${Number(totalCost).toFixed(2)} €</strong><br>${items}`;
     details.appendChild(field);
   }
-  if(p.forSale !== undefined && p.forSale !== null) {
+  if (p.forSale !== undefined && p.forSale !== null) {
     const field = el('div','field');
     field.innerHTML = `<strong>Para Venda:</strong> ${p.forSale ? 'Sim' : 'Não'}`;
     details.appendChild(field);
@@ -247,9 +416,6 @@ function showDetails(p){
     <th style="text-align:center">Ação</th>
   </tr>`;
   hoursTable.appendChild(thead);
-
-  // Carregar horas
-  loadHoursDetail(p.id);
   
   const tbody = el('tbody');
   tbody.id = 'hours-tbody-detail';
@@ -269,6 +435,9 @@ function showDetails(p){
   
   body.appendChild(hoursSection);
   
+  // Carregar horas
+  loadHoursDetail(p.id);
+  
   // Armazenar projeto atual nos data attributes para os botões do header
   modal.dataset.projectId = p.id;
   modal.dataset.projectData = JSON.stringify(p);
@@ -276,7 +445,9 @@ function showDetails(p){
   modal.classList.remove('hidden');
 }
 
-function closeDetail(){ document.getElementById('detail-modal').classList.add('hidden'); }
+function closeDetail(){
+  document.getElementById('detail-modal').classList.add('hidden');
+}
 
 function bindBackdropClose(modalId, onClose) {
   const modal = document.getElementById(modalId);
@@ -286,7 +457,7 @@ function bindBackdropClose(modalId, onClose) {
   });
 }
 
-// Hour logging functions
+// Funções de registo de horas
 function openHourFormModal(projectId, category) {
   document.getElementById('hour-id').value = '';
   document.getElementById('hour-project-id').value = projectId;
@@ -313,85 +484,166 @@ function closeHourModal() {
   document.getElementById('hour-modal').classList.add('hidden');
 }
 
-async function loadHours(projectId) {
-  const res = await fetch(`/api/hours/${projectId}`);
-  const hours = await res.json();
-  
-  const tbody = document.getElementById('hours-tbody');
-  tbody.innerHTML = '';
-  
-  if (hours.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px">Sem registos</td></tr>';
-    return;
+async function getHoursForProject(projectId) {
+  // 1. Tentar API
+  try {
+    const res = await fetch(`${hoursApiBase}/${projectId}`);
+    if (res.ok) {
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return await res.json();
+      }
+    }
+  } catch (e) {
+    console.info('Hours API indisponível, a usar dados locais.');
   }
-  
-  // Get category for edit modal
+
+  // 2. Tentar localStorage ou data/hours.json
+  let allHours = getLocalHours();
+  if (!allHours) {
+    allHours = await loadInitialHoursFromFile();
+    setLocalHours(allHours);
+  }
+
+  const projectHours = [];
+  for (const cat in allHours) {
+    if (allHours[cat] && allHours[cat][projectId]) {
+      projectHours.push(...allHours[cat][projectId]);
+    }
+  }
+  return projectHours;
+}
+
+async function saveHourEntry({ projectId, category, date, startTime, duration, pointsDone }, hourId = null) {
+  let allHours = getLocalHours();
+  if (!allHours) {
+    allHours = await loadInitialHoursFromFile();
+  }
+  if (!allHours[category]) allHours[category] = {};
+  if (!allHours[category][projectId]) allHours[category][projectId] = [];
+
   const projects = await fetchProjects();
   const project = projects.find(p => p.id === projectId);
-  const category = project?.category || '';
-  
-  hours.forEach(h => {
-    const row = document.createElement('tr');
-    row.style.borderBottom = '1px solid #eee';
-    row.innerHTML = `
-      <td style="padding:8px">${h.date}</td>
-      <td style="padding:8px">${h.startTime}</td>
-      <td style="padding:8px; text-align:center">${h.duration}min</td>
-      <td style="padding:8px; text-align:center">${h.pointsDone}</td>
-      <td style="padding:8px; text-align:center">${h.totalPoints}</td>
-      <td style="padding:8px; text-align:center"><strong>${h.percentage}%</strong></td>
-      <td style="padding:8px; text-align:center">
-        <button class="edit-hour-btn" data-hour-json="${encodeURIComponent(JSON.stringify(h))}" data-project-id="${projectId}" data-category="${category}" style="background:none; border:none; cursor:pointer; color:blue; margin-right:8px">✎</button>
-        <button class="delete-hour-btn" data-hour-id="${h.id}" data-project-id="${projectId}" style="background:none; border:none; cursor:pointer; color:red">🗑️</button>
-      </td>
-    `;
-    tbody.appendChild(row);
-  });
-  
-  // Add edit handlers
-  document.querySelectorAll('.edit-hour-btn').forEach(btn => {
-    btn.onclick = async (e) => {
-      e.preventDefault();
-      const hour = JSON.parse(decodeURIComponent(btn.dataset.hourJson));
-      const pid = btn.dataset.projectId;
-      const cat = btn.dataset.category;
-      openHourEditModal(pid, cat, hour);
+  const totalTargetPoints = project && project.numPoints ? parseInt(project.numPoints, 10) : 0;
+
+  if (hourId) {
+    const idx = allHours[category][projectId].findIndex(h => h.id === hourId);
+    if (idx !== -1) {
+      allHours[category][projectId][idx] = {
+        ...allHours[category][projectId][idx],
+        date,
+        startTime,
+        duration,
+        pointsDone
+      };
+    }
+  } else {
+    const newEntry = {
+      id: Date.now().toString(),
+      date,
+      startTime,
+      duration,
+      pointsDone,
+      totalPoints: 0,
+      percentage: 0
     };
-  });
-  
-  // Add delete handlers
-  document.querySelectorAll('.delete-hour-btn').forEach(btn => {
-    btn.onclick = async (e) => {
-      e.preventDefault();
-      const hourId = btn.dataset.hourId;
-      const pid = btn.dataset.projectId;
-      if (confirm('Eliminar este registo?')) {
-        await fetch(`/api/hours/${pid}/${hourId}`, { method: 'DELETE' });
-        loadHours(pid);
-        // Refresh detail view
-        const projects = await fetchProjects();
-        const project = projects.find(p => p.id === pid);
-        if (project) showDetails(project);
+    allHours[category][projectId].push(newEntry);
+  }
+
+  // Recalcular totais e percentagens para o projeto
+  let runningTotal = 0;
+  for (const h of allHours[category][projectId]) {
+    runningTotal += (h.pointsDone || 0);
+    h.totalPoints = runningTotal;
+    h.percentage = totalTargetPoints > 0 ? Math.round((runningTotal / totalTargetPoints) * 100) : 0;
+  }
+  setLocalHours(allHours);
+
+  // Atualizar progresso do projeto
+  const lastEntry = allHours[category][projectId][allHours[category][projectId].length - 1];
+  const completionPercentage = lastEntry ? Math.min(lastEntry.percentage, 100) : 0;
+  if (project) {
+    project.completion = completionPercentage;
+    const pIdx = projects.findIndex(p => p.id === projectId);
+    if (pIdx !== -1) {
+      projects[pIdx].completion = completionPercentage;
+      setLocalProjects(projects);
+    }
+  }
+
+  // Tentar sincronização com API
+  try {
+    const url = hourId ? `${hoursApiBase}/${projectId}/${hourId}` : hoursApiBase;
+    const method = hourId ? 'PUT' : 'POST';
+    await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, category, date, startTime, duration, pointsDone })
+    });
+  } catch (e) {
+    console.info('Registo de horas na API ignorado (modo offline/standalone).');
+  }
+}
+
+async function deleteHourEntry(projectId, hourId) {
+  let allHours = getLocalHours();
+  if (!allHours) {
+    allHours = await loadInitialHoursFromFile();
+  }
+
+  const projects = await fetchProjects();
+  const project = projects.find(p => p.id === projectId);
+  const totalTargetPoints = project && project.numPoints ? parseInt(project.numPoints, 10) : 0;
+
+  for (const cat in allHours) {
+    if (allHours[cat] && allHours[cat][projectId]) {
+      const idx = allHours[cat][projectId].findIndex(h => h.id === hourId);
+      if (idx !== -1) {
+        allHours[cat][projectId].splice(idx, 1);
+
+        let runningTotal = 0;
+        for (const h of allHours[cat][projectId]) {
+          runningTotal += (h.pointsDone || 0);
+          h.totalPoints = runningTotal;
+          h.percentage = totalTargetPoints > 0 ? Math.round((runningTotal / totalTargetPoints) * 100) : 0;
+        }
+
+        setLocalHours(allHours);
+
+        const lastEntry = allHours[cat][projectId][allHours[cat][projectId].length - 1];
+        const completionPercentage = lastEntry ? Math.min(lastEntry.percentage, 100) : 0;
+        if (project) {
+          project.completion = completionPercentage;
+          const pIdx = projects.findIndex(p => p.id === projectId);
+          if (pIdx !== -1) {
+            projects[pIdx].completion = completionPercentage;
+            setLocalProjects(projects);
+          }
+        }
+        break;
       }
-    };
-  });
+    }
+  }
+
+  try {
+    await fetch(`${hoursApiBase}/${projectId}/${hourId}`, { method: 'DELETE' });
+  } catch (e) {
+    console.info('Eliminação de hora na API ignorada (modo offline/standalone).');
+  }
 }
 
 async function loadHoursDetail(projectId) {
-  const res = await fetch(`/api/hours/${projectId}`);
-  const hours = await res.json();
-  
+  const hours = await getHoursForProject(projectId);
   const tbody = document.getElementById('hours-tbody-detail');
   if (!tbody) return;
   
   tbody.innerHTML = '';
   
-  if (hours.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px">Sem registos</td></tr>';
+  if (!hours || hours.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px">Sem registos</td></tr>';
     return;
   }
   
-  // Get category for edit modal
   const projects = await fetchProjects();
   const project = projects.find(p => p.id === projectId);
   const category = project?.category || '';
@@ -400,23 +652,23 @@ async function loadHoursDetail(projectId) {
     const row = document.createElement('tr');
     row.style.borderBottom = '1px solid #eee';
     row.innerHTML = `
-      <td style="padding:8px">${h.date}</td>
-      <td style="padding:8px">${h.startTime}</td>
-      <td style="padding:8px; text-align:center">${h.duration}min</td>
-      <td style="padding:8px; text-align:center">${h.pointsDone}</td>
-      <td style="padding:8px; text-align:center">${h.totalPoints}</td>
-      <td style="padding:8px; text-align:center"><strong>${h.percentage}%</strong></td>
+      <td style="padding:8px">${h.date || ''}</td>
+      <td style="padding:8px">${h.startTime || ''}</td>
+      <td style="padding:8px; text-align:center">${h.duration || 0}min</td>
+      <td style="padding:8px; text-align:center">${h.pointsDone || 0}</td>
+      <td style="padding:8px; text-align:center">${h.totalPoints || 0}</td>
+      <td style="padding:8px; text-align:center"><strong>${h.percentage || 0}%</strong></td>
       <td style="padding:8px; text-align:center">
-        <button class="edit-hour-detail-btn" data-hour-json="${encodeURIComponent(JSON.stringify(h))}" data-project-id="${projectId}" data-category="${category}" style="background:none; border:none; cursor:pointer; color:blue; margin-right:8px">✎</button>
-        <button class="delete-hour-detail-btn" data-hour-id="${h.id}" data-project-id="${projectId}" style="background:none; border:none; cursor:pointer; color:red">🗑️</button>
+        <button class="edit-hour-detail-btn" data-hour-json="${encodeURIComponent(JSON.stringify(h))}" data-project-id="${projectId}" data-category="${category}" style="background:none; border:none; cursor:pointer; color:blue; margin-right:8px" title="Editar">✎</button>
+        <button class="delete-hour-detail-btn" data-hour-id="${h.id}" data-project-id="${projectId}" style="background:none; border:none; cursor:pointer; color:red" title="Eliminar">🗑️</button>
       </td>
     `;
     tbody.appendChild(row);
   });
   
-  // Add edit handlers
-  document.querySelectorAll('.edit-hour-detail-btn').forEach(btn => {
-    btn.onclick = async (e) => {
+  // Handlers de edição
+  tbody.querySelectorAll('.edit-hour-detail-btn').forEach(btn => {
+    btn.onclick = (e) => {
       e.preventDefault();
       const hour = JSON.parse(decodeURIComponent(btn.dataset.hourJson));
       const pid = btn.dataset.projectId;
@@ -425,24 +677,22 @@ async function loadHoursDetail(projectId) {
     };
   });
   
-  // Add delete handlers
-  document.querySelectorAll('.delete-hour-detail-btn').forEach(btn => {
+  // Handlers de eliminação
+  tbody.querySelectorAll('.delete-hour-detail-btn').forEach(btn => {
     btn.onclick = async (e) => {
       e.preventDefault();
       const hourId = btn.dataset.hourId;
       const pid = btn.dataset.projectId;
       if (confirm('Eliminar este registo?')) {
-        await fetch(`/api/hours/${pid}/${hourId}`, { method: 'DELETE' });
+        await deleteHourEntry(pid, hourId);
         loadHoursDetail(pid);
-        // Refresh detail view
-        const projects = await fetchProjects();
-        const project = projects.find(p => p.id === pid);
-        if (project) showDetails(project);
+        const updatedProjects = await fetchProjects();
+        const updatedProj = updatedProjects.find(p => p.id === pid);
+        if (updatedProj) showDetails(updatedProj);
       }
     };
   });
 }
-
 
 function navigateToCategory(category){
   fetchProjects().then(projects => showCategoryView(category, projects));
@@ -452,7 +702,10 @@ function openFormModal(){
   toggleNotesField();
   document.getElementById('project-form-modal').classList.remove('hidden');
 }
-function closeFormModal(){ document.getElementById('project-form-modal').classList.add('hidden'); }
+
+function closeFormModal(){
+  document.getElementById('project-form-modal').classList.add('hidden');
+}
 
 function formatMoney(value){
   if (value === null || value === undefined || value === '') return '0.00';
@@ -493,7 +746,7 @@ function getFormData(){
     acquisitionDate: document.getElementById('acquisitionDate').value || null,
     startDate: document.getElementById('startDate').value || null,
     endDate: document.getElementById('endDate').value || null,
-    completion: parseInt(document.getElementById('completion').value) || 0,
+    completion: parseInt(document.getElementById('completion').value, 10) || 0,
     costs: getCostsObject(),
     forSale: document.getElementById('forSale').value === 'true'
   };
@@ -538,11 +791,6 @@ function populateForm(p){
   document.getElementById('form-title').textContent = 'Editar Projecto';
 }
 
-async function removeProject(id){
-  await fetch(`${apiBase}/${id}`, { method: 'DELETE' });
-  if (currentCategory) navigateToCategory(currentCategory);
-}
-
 function applyTheme(theme) {
   const body = document.body;
   const isDark = theme === 'dark';
@@ -567,7 +815,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     applyTheme(nextTheme);
   };
 
-  // home card clicks
+  // Cliques nos cartões da página inicial
   document.querySelectorAll('.cards .card').forEach(card => {
     card.onclick = () => navigateToCategory(card.dataset.category);
   });
@@ -586,29 +834,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
   document.getElementById('detail-delete-btn').onclick = async () => {
     const modal = document.getElementById('detail-modal');
-    if(confirm('Eliminar este projecto?')){
+    if (confirm('Eliminar este projecto?')) {
       await removeProject(modal.dataset.projectId);
       closeDetail();
     }
   };
-  document.getElementById('cancel').onclick = (e) => { e.preventDefault(); resetForm(); closeFormModal(); };
+  document.getElementById('cancel').onclick = (e) => {
+    e.preventDefault();
+    resetForm();
+    closeFormModal();
+  };
 
   document.getElementById('project-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('project-id').value;
     const data = getFormData();
-    if(id){
-      await fetch(`${apiBase}/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
-    } else {
-      await fetch(apiBase, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
-    }
+    await saveProject(data, id);
     closeFormModal();
     if (currentCategory) navigateToCategory(currentCategory); else showHome();
   });
 
-  // Hour modal listeners
+  // Listeners do modal de registo de horas
   document.getElementById('hour-close').onclick = () => closeHourModal();
-  document.getElementById('hour-cancel').onclick = (e) => { e.preventDefault(); closeHourModal(); };
+  document.getElementById('hour-cancel').onclick = (e) => {
+    e.preventDefault();
+    closeHourModal();
+  };
   
   document.getElementById('hour-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -617,39 +868,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     const category = document.getElementById('hour-category').value;
     const date = document.getElementById('hour-date').value;
     const startTime = document.getElementById('hour-start-time').value;
-    const duration = parseInt(document.getElementById('hour-duration').value);
-    const pointsDone = parseInt(document.getElementById('hour-points-done').value);
+    const duration = parseInt(document.getElementById('hour-duration').value, 10);
+    const pointsDone = parseInt(document.getElementById('hour-points-done').value, 10);
     
-    if (!date || !startTime || !duration || !pointsDone) {
+    if (!date || !startTime || isNaN(duration) || isNaN(pointsDone)) {
       alert('Preencha todos os campos');
       return;
     }
     
-    const url = hourId 
-      ? `/api/hours/${projectId}/${hourId}`
-      : '/api/hours';
-    const method = hourId ? 'PUT' : 'POST';
+    await saveHourEntry({ projectId, category, date, startTime, duration, pointsDone }, hourId);
+    document.getElementById('hour-form').reset();
+    document.getElementById('hour-date').valueAsDate = new Date();
+    closeHourModal();
+    loadHoursDetail(projectId);
     
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId, category, date, startTime, duration, pointsDone })
-    });
-    
-    if (res.ok) {
-      document.getElementById('hour-form').reset();
-      document.getElementById('hour-date').valueAsDate = new Date();
-      closeHourModal();
-      loadHours(projectId);
-      // Refresh project completion
-      const projects = await fetchProjects();
-      const project = projects.find(p => p.id === projectId);
-      if (project) showDetails(project);
-    } else {
-      alert('Erro ao guardar registo');
-    }
+    // Atualizar visualização dos detalhes
+    const projects = await fetchProjects();
+    const project = projects.find(p => p.id === projectId);
+    if (project) showDetails(project);
   });
 
-  // initial view
+  // Vista inicial
   showHome();
 });
