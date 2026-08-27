@@ -40,5 +40,30 @@
     },
     "forSale": false,
     "notes": ""
+  },
+  {
+    "title": "Cozy Home",
+    "description": "Diamond Art Club by Yuumei Art",
+    "notes": "",
+    "category": "Diamond Painting",
+    "image": "https://www.yuumeiart.com/digital-shop/cozy-home-hd-file",
+    "status": "Planned",
+    "numPoints": "102565",
+    "dimensionsCm": "90.9 x 69.9",
+    "dimensionsPoints": null,
+    "numColors": "85",
+    "acquisitionDate": "2026-08-27",
+    "startDate": null,
+    "endDate": null,
+    "completion": 0,
+    "costs": {
+      "materiais": 90.95,
+      "transporte": 0,
+      "moldura": 0,
+      "outros": 0
+    },
+    "forSale": false,
+    "id": "1787867824419",
+    "hourLog": []
   }
 ]
