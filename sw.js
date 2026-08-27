@@ -34,6 +34,49 @@ self.addEventListener('activate', (event) => {
 
 //pedidos
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // 1. Intercepta a rota de API de projetos (ex: api/project/1 ou api/projects)
+  if (url.pathname.includes('/api/project')) {
+    event.respondWith(
+      caches.match('./data/projectos.json').then(async (response) => {
+        // Se não estiver em cache, procura no servidor estático
+        const res = response || await fetch('./data/projectos.json');
+        const projects = await res.json();
+
+        // Extrai o ID do URL se existir (ex: /api/project/123)
+        const pathParts = url.pathname.split('/');
+        const projectId = pathParts[pathParts.length - 1];
+
+        // Se o último segmento for um número/ID, filtra o projeto específico
+        if (projectId && !isNaN(projectId)) {
+          const project = projects.find((p) => p.id == projectId);
+          return new Response(JSON.stringify(project || {}), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Se for uma busca geral (/api/projects), devolve a lista completa
+        return new Response(JSON.stringify(projects), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      })
+    );
+    return;
+  }
+  
+  // 2. Intercepta a rota de API de horas (ex: api/hours)
+  if (url.pathname.includes('/api/hours')) {
+    event.respondWith(
+      caches.match('./data/hours.json').then(async (response) => {
+        const res = response || await fetch('./data/hours.json');
+        return res;
+      })
+    );
+    return;
+  }
+
+  // 3. Para todos os outros ficheiros (HTML, CSS, JS, Imagens)
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
         if (cachedResponse) {
