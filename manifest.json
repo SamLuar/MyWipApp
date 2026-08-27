@@ -1,7 +1,7 @@
 {
     "name": "My Wip App",
     "short_name": "MyWipApp",
-    "start_url": "/",
+    "start_url": "/public/index.html",
     "display": "standalone",
     "orientation": "portrait",
     "background_color": "#ffffff",
