@@ -37,11 +37,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // 1. Intercepta a rota de API de projetos (ex: api/project/1 ou api/projects)
-  if (url.pathname.includes('/api/project')) {
+  if (url.pathname.includes('/api/projects')) {
     event.respondWith(
-      caches.match('./data/projectos.json').then(async (response) => {
+      caches.match('./data/projects.json').then(async (response) => {
         // Se não estiver em cache, procura no servidor estático
-        const res = response || await fetch('./data/projectos.json');
+        const res = response || await fetch('./data/projects.json');
         const projects = await res.json();
 
         // Extrai o ID do URL se existir (ex: /api/project/123)
@@ -70,7 +70,19 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.match('./data/hours.json').then(async (response) => {
         const res = response || await fetch('./data/hours.json');
-        return res;
+        const hours = await res.json();
+        const projectHours = [];
+
+        // Extrai o ID do URL se existir (ex: /api/hours/123)
+        const pathParts = url.pathname.split('/');
+        const projectId = pathParts[pathParts.length - 1];
+        
+        for (const category in hours) {
+          if (hours[category][projectId]) {
+            projectHours.push(...hours[category][projectId]);
+          }
+        }
+        res.json(projectHours);
       })
     );
     return;
