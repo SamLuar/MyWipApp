@@ -1,14 +1,14 @@
 const CACHE_NAME = 'wip-cache-v1';
 
 const ASSETS_TO_CACHE = [
-  '/',
-  '/data/hours.json',
-  '/data/projects.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
-  '/public/styles.css',
-  '/public/app.js',
-  '/public/index.html',
+  './',
+  './data/hours.json',
+  './data/projects.json',
+  './icons/icon-192x192.png',
+  './icons/icon-512x512.png',
+  './styles.css',
+  './app.js',
+  './index.html',
 ];
 
 //Instalação:
