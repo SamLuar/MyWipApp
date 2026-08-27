@@ -9,7 +9,7 @@ const DATA_FILE = path.join(DATA_DIR, 'projects.json');
 const HOURS_FILE = path.join(DATA_DIR, 'hours.json');
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
 
 async function readData() {
   try {
