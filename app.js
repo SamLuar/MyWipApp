@@ -1,4 +1,4 @@
-const apiBase = '/api/projects';
+const apiBase = './data/projects.json';
 let currentCategory = null;
 
 const CATEGORIES = ['Ponto Cruz','Diamond Painting','Patterns','Outros'];
@@ -44,14 +44,14 @@ function showCategoryView(category, projects){
   if (bannerTitle) {
     bannerTitle.textContent = category;
   }
-  renderCategoryNav(category);
+  renderCategoryNav();
   renderAccordions(category, projects);
 }
 
-function renderCategoryNav(current){
+function renderCategoryNav(){
   const nav = document.getElementById('category-nav');
   nav.innerHTML = '';
-  CATEGORIES.filter(c => c !== current).forEach(c => {
+  CATEGORIES.forEach(c => {
     const b = el('button'); b.textContent = c; b.onclick = () => navigateToCategory(c);
     nav.appendChild(b);
   });
