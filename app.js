@@ -219,6 +219,7 @@ async function saveProject(data, id) {
     projects.push(newProject);
   }
   setLocalProjects(projects);
+  markDataChanged();
 
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     try {
@@ -245,6 +246,7 @@ async function removeProject(id) {
   let projects = await fetchProjects();
   projects = projects.filter(p => p.id !== id);
   setLocalProjects(projects);
+  markDataChanged();
 
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     try {
@@ -727,6 +729,7 @@ async function saveHourEntry({ projectId, category, date, startTime, duration, p
       setLocalProjects(projects);
     }
   }
+  markDataChanged();
 
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     try {
@@ -778,6 +781,7 @@ async function deleteHourEntry(projectId, hourId) {
             setLocalProjects(projects);
           }
         }
+        markDataChanged();
         break;
       }
     }
@@ -963,6 +967,529 @@ function applyTheme(theme) {
   localStorage.setItem('wip-theme', theme);
 }
 
+// ==========================================
+// MÓDULO DE BACKUP GITHUB (CICLO DE 24 HORAS)
+// ==========================================
+const BACKUP_CONFIG_KEY = 'wip_github_config';
+const BACKUP_LAST_TIME_KEY = 'wip_last_backup_time';
+const BACKUP_HAS_CHANGES_KEY = 'wip_has_unbacked_changes';
+const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 horas
+
+function getGitHubConfig() {
+  try {
+    const raw = localStorage.getItem(BACKUP_CONFIG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return {
+    owner: 'SamLuar',
+    repo: 'MyWipApp',
+    branch: 'feat/pwa4Android',
+    token: ''
+  };
+}
+
+function saveGitHubConfig(cfg) {
+  localStorage.setItem(BACKUP_CONFIG_KEY, JSON.stringify(cfg));
+}
+
+function markDataChanged() {
+  localStorage.setItem(BACKUP_HAS_CHANGES_KEY, 'true');
+  updateBackupModalUI();
+  // Se já passaram 24 horas desde o último backup, aciona imediatamente
+  checkAndTrigger24hBackup();
+}
+
+function showBackupToast(message, type = 'info') {
+  let container = document.getElementById('wip-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'wip-toast-container';
+    container.className = 'wip-toast-container';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = `wip-toast toast-${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => {
+      if (toast.parentElement) toast.parentElement.removeChild(toast);
+    }, 300);
+  }, 4000);
+}
+
+async function commitFileToGitHub(cfg, filePath, fileContent, message) {
+  const { owner, repo, branch, token } = cfg;
+  const targetBranch = branch || 'main';
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${encodeURIComponent(targetBranch)}`;
+
+  // 1. Obter SHA atual do ficheiro
+  let sha = null;
+  try {
+    const getRes = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token.trim()}`,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+    if (getRes.ok) {
+      const fileInfo = await getRes.json();
+      sha = fileInfo.sha;
+    }
+  } catch (e) {
+    console.warn(`Não foi possível obter SHA para ${filePath}:`, e);
+  }
+
+  // 2. Converter conteúdo para Base64 UTF-8 de forma segura
+  const bytes = new TextEncoder().encode(fileContent);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const contentBase64 = btoa(binary);
+
+  // 3. Fazer PUT com novo commit
+  const putBody = {
+    message: `${message} (${new Date().toLocaleDateString('pt-PT')})`,
+    content: contentBase64,
+    branch: targetBranch
+  };
+  if (sha) {
+    putBody.sha = sha;
+  }
+
+  const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token.trim()}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(putBody)
+  });
+
+  if (!putRes.ok) {
+    const errData = await putRes.json().catch(() => ({}));
+    throw new Error(errData.message || `HTTP ${putRes.status}`);
+  }
+
+  return await putRes.json();
+}
+
+async function performGitHubBackup(cfg) {
+  try {
+    showBackupToast('A realizar backup para o GitHub...', 'info');
+
+    const projects = await fetchProjects();
+    let allHours = getLocalHours();
+    if (!allHours) {
+      allHours = await loadInitialHoursFromFile();
+    }
+
+    const projectsContent = JSON.stringify(projects, null, 2);
+    const hoursContent = JSON.stringify(allHours, null, 2);
+
+    // 1. Commit data/projects.json
+    await commitFileToGitHub(cfg, 'data/projects.json', projectsContent, 'backup: auto-sync projects.json [24h]');
+
+    // 2. Commit data/hours.json
+    await commitFileToGitHub(cfg, 'data/hours.json', hoursContent, 'backup: auto-sync hours.json [24h]');
+
+    // Atualiza estado do backup
+    localStorage.setItem(BACKUP_LAST_TIME_KEY, Date.now().toString());
+    localStorage.setItem(BACKUP_HAS_CHANGES_KEY, 'false');
+
+    showBackupToast('✓ Backup para o GitHub concluído com sucesso!', 'success');
+    updateBackupModalUI();
+    return { success: true };
+  } catch (err) {
+    console.error('Erro no backup para o GitHub:', err);
+    showBackupToast(`Erro no backup GitHub: ${err.message}`, 'error');
+    updateBackupModalUI();
+    return { success: false, error: err.message };
+  }
+}
+
+async function checkAndTrigger24hBackup(force = false) {
+  const cfg = getGitHubConfig();
+  if (!cfg || !cfg.token || !cfg.owner || !cfg.repo) {
+    updateBackupModalUI();
+    return { success: false, reason: 'no_token' };
+  }
+
+  const hasChanges = localStorage.getItem(BACKUP_HAS_CHANGES_KEY) === 'true';
+  const lastBackup = parseInt(localStorage.getItem(BACKUP_LAST_TIME_KEY) || '0', 10);
+  const now = Date.now();
+  const timeDiff = now - lastBackup;
+
+  if (!force) {
+    if (!hasChanges) {
+      updateBackupModalUI();
+      return { success: true, reason: 'no_changes' };
+    }
+    // Verifica se já passaram 24 horas
+    if (timeDiff < BACKUP_INTERVAL_MS) {
+      updateBackupModalUI();
+      return { success: true, reason: 'waiting_24h' };
+    }
+  }
+
+  return await performGitHubBackup(cfg);
+}
+
+async function exportBackupJson() {
+  const projects = await fetchProjects();
+  let hours = getLocalHours();
+  if (!hours) hours = await loadInitialHoursFromFile();
+
+  const backupData = {
+    exportedAt: new Date().toISOString(),
+    projects,
+    hours
+  };
+
+  const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mywip-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showBackupToast('Ficheiro de backup JSON exportado com sucesso!', 'success');
+}
+
+function importBackupJson(file) {
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (Array.isArray(data.projects)) {
+        setLocalProjects(data.projects);
+      }
+      if (data.hours && typeof data.hours === 'object') {
+        setLocalHours(data.hours);
+      }
+      markDataChanged();
+      showBackupToast('Dados importados com sucesso!', 'success');
+      if (currentCategory) navigateToCategory(currentCategory); else showHome();
+    } catch (err) {
+      alert('Erro ao ler o ficheiro JSON de backup: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function openBackupModal() {
+  const cfg = getGitHubConfig();
+  document.getElementById('gh-token').value = cfg.token || '';
+  document.getElementById('gh-owner').value = cfg.owner || 'SamLuar';
+  document.getElementById('gh-repo').value = cfg.repo || 'MyWipApp';
+  document.getElementById('gh-branch').value = cfg.branch || 'feat/pwa4Android';
+  updateBackupModalUI();
+  document.getElementById('backup-modal').classList.remove('hidden');
+}
+
+function closeBackupModal() {
+  document.getElementById('backup-modal').classList.add('hidden');
+}
+
+function updateBackupModalUI() {
+  const statusText = document.getElementById('backup-status-text');
+  const lastTimeEl = document.getElementById('backup-last-time');
+  const pendingEl = document.getElementById('backup-pending-changes');
+  const nextTimeEl = document.getElementById('backup-next-time');
+  if (!statusText || !lastTimeEl) return;
+
+  const cfg = getGitHubConfig();
+  const hasToken = Boolean(cfg.token && cfg.token.trim());
+  const hasChanges = localStorage.getItem(BACKUP_HAS_CHANGES_KEY) === 'true';
+  const lastBackup = parseInt(localStorage.getItem(BACKUP_LAST_TIME_KEY) || '0', 10);
+  const now = Date.now();
+  const timeDiff = now - lastBackup;
+
+  if (!hasToken) {
+    statusText.textContent = 'Token GitHub não configurado';
+    statusText.style.color = '#e36209';
+  } else if (hasChanges) {
+    if (timeDiff >= BACKUP_INTERVAL_MS) {
+      statusText.textContent = 'Pronto para backup (24h atingidas)';
+      statusText.style.color = '#2ea043';
+    } else {
+      statusText.textContent = 'Alterações gravadas (aguarda ciclo de 24h)';
+      statusText.style.color = '#0064c8';
+    }
+  } else {
+    statusText.textContent = 'Sincronizado / Sem alterações pendentes';
+    statusText.style.color = '#2ea043';
+  }
+
+  if (lastBackup > 0) {
+    const d = new Date(lastBackup);
+    lastTimeEl.textContent = `${d.toLocaleDateString('pt-PT')} às ${d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`;
+  } else {
+    lastTimeEl.textContent = 'Nunca';
+  }
+
+  pendingEl.textContent = hasChanges ? 'Sim' : 'Nenhuma';
+
+  if (hasChanges && hasToken) {
+    if (timeDiff >= BACKUP_INTERVAL_MS) {
+      nextTimeEl.textContent = 'Imediato (ao próximo ciclo / acione agora)';
+    } else {
+      const remainingHours = ((BACKUP_INTERVAL_MS - timeDiff) / (1000 * 60 * 60)).toFixed(1);
+      nextTimeEl.textContent = `Em ~${remainingHours}h`;
+    }
+  } else if (!hasChanges && hasToken) {
+    nextTimeEl.textContent = '24h após a próxima alteração';
+  } else {
+    nextTimeEl.textContent = 'Configure o token';
+  }
+}
+
+function ensureBackupStyles() {
+  if (document.getElementById('backup-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'backup-styles';
+  style.textContent = `
+    .backup-btn {
+      font-size: 1.1rem;
+      margin-left: 8px;
+      cursor: pointer;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+    .backup-btn:hover {
+      background: #f0f0f0;
+    }
+    body.dark-mode .backup-btn {
+      border-color: #3a485d;
+      background: #1d2735;
+      color: #e8edf5;
+    }
+    body.dark-mode .backup-btn:hover {
+      background: #243041;
+    }
+
+    .wip-toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .wip-toast {
+      pointer-events: auto;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      color: #fff;
+      background: #333;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      animation: wipToastFadeIn 0.3s ease;
+      transition: opacity 0.3s ease;
+      max-width: 340px;
+    }
+    .wip-toast.toast-success { background: #2ea043; }
+    .wip-toast.toast-error { background: #cf222e; }
+    .wip-toast.toast-info { background: #0969da; }
+
+    @keyframes wipToastFadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .backup-modal-content {
+      max-width: 520px;
+      width: 92%;
+    }
+    .backup-status-card {
+      background: #f6f8fa;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    body.dark-mode .backup-status-card {
+      background: #161b22;
+      border-color: #30363d;
+    }
+    .status-row {
+      margin-bottom: 4px;
+    }
+    .token-input-group {
+      display: flex;
+      gap: 6px;
+    }
+    .token-input-group input {
+      flex: 1;
+    }
+    .help-text {
+      display: block;
+      margin-top: 4px;
+      color: #6e7781;
+      font-size: 0.8rem;
+    }
+    body.dark-mode .help-text {
+      color: #8b949e;
+    }
+    .modal-divider {
+      border: 0;
+      border-top: 1px solid #e1e4e8;
+      margin: 14px 0;
+    }
+    body.dark-mode .modal-divider {
+      border-top-color: #30363d;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function setupBackupUI() {
+  ensureBackupStyles();
+
+  // 1. Injetar botão na topbar
+  const topbar = document.querySelector('.topbar');
+  if (topbar && !document.getElementById('backup-btn')) {
+    const backupBtn = document.createElement('button');
+    backupBtn.id = 'backup-btn';
+    backupBtn.className = 'icon-btn backup-btn';
+    backupBtn.title = 'Backup GitHub (24h)';
+    backupBtn.textContent = '☁️';
+    backupBtn.onclick = openBackupModal;
+    topbar.appendChild(backupBtn);
+  }
+
+  // 2. Injetar modal de backup no body se não existir
+  if (!document.getElementById('backup-modal')) {
+    const modal = document.createElement('div');
+    modal.id = 'backup-modal';
+    modal.className = 'modal hidden';
+    modal.innerHTML = `
+      <div class="modal-content backup-modal-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h2 style="margin:0; font-size:1.3rem;">Backup GitHub (24h)</h2>
+          <button id="backup-modal-close" style="background:none; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+        </div>
+        <div class="backup-modal-body">
+          <div class="backup-status-card">
+            <div class="status-row"><strong>Estado:</strong> <span id="backup-status-text">A carregar...</span></div>
+            <div class="status-row"><strong>Último Backup:</strong> <span id="backup-last-time">Nunca</span></div>
+            <div class="status-row"><strong>Alterações Pendentes:</strong> <span id="backup-pending-changes">Nenhuma</span></div>
+            <div class="status-row"><strong>Próximo Backup Automático:</strong> <span id="backup-next-time">--</span></div>
+          </div>
+
+          <hr class="modal-divider">
+
+          <h3 style="margin:0 0 10px 0; font-size:1.05rem;">Configuração do Repositório</h3>
+          <div class="form-group" style="margin-bottom:10px;">
+            <label for="gh-token" style="display:block; font-weight:bold; margin-bottom:4px; font-size:0.9rem;">Personal Access Token (GitHub PAT):</label>
+            <div class="token-input-group">
+              <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="width:100%; padding:8px; box-sizing:border-box;">
+              <button type="button" id="gh-token-toggle" style="padding:8px 12px; cursor:pointer;" title="Mostrar/Ocultar Token">👁️</button>
+            </div>
+            <small class="help-text">Token pessoal do GitHub com permissão de escrita de ficheiros (ex: <code>Contents: Write</code> ou <code>repo</code>).</small>
+          </div>
+
+          <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:130px;">
+              <label for="gh-owner" style="display:block; font-weight:bold; margin-bottom:4px; font-size:0.9rem;">Utilizador / Org:</label>
+              <input type="text" id="gh-owner" placeholder="SamLuar" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+            <div style="flex:1; min-width:130px;">
+              <label for="gh-repo" style="display:block; font-weight:bold; margin-bottom:4px; font-size:0.9rem;">Repositório:</label>
+              <input type="text" id="gh-repo" placeholder="MyWipApp" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+            <div style="flex:1; min-width:130px;">
+              <label for="gh-branch" style="display:block; font-weight:bold; margin-bottom:4px; font-size:0.9rem;">Branch:</label>
+              <input type="text" id="gh-branch" placeholder="feat/pwa4Android" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+          </div>
+
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;">
+            <button type="button" id="gh-save-btn" style="background:#0064c8; color:white; padding:8px 14px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Guardar Configuração</button>
+            <button type="button" id="gh-backup-now-btn" style="background:#2ea043; color:white; padding:8px 14px; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Fazer Backup Agora</button>
+            <button type="button" id="gh-export-btn" style="padding:8px 14px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">Exportar JSON</button>
+            <button type="button" id="gh-import-btn" style="padding:8px 14px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">Importar JSON</button>
+            <input type="file" id="gh-import-file" accept=".json" style="display:none;">
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    bindBackdropClose('backup-modal', closeBackupModal);
+    document.getElementById('backup-modal-close').onclick = closeBackupModal;
+
+    // Toggle password
+    document.getElementById('gh-token-toggle').onclick = () => {
+      const input = document.getElementById('gh-token');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    };
+
+    // Guardar configurações
+    document.getElementById('gh-save-btn').onclick = () => {
+      const token = document.getElementById('gh-token').value.trim();
+      const owner = document.getElementById('gh-owner').value.trim() || 'SamLuar';
+      const repo = document.getElementById('gh-repo').value.trim() || 'MyWipApp';
+      const branch = document.getElementById('gh-branch').value.trim() || 'feat/pwa4Android';
+      saveGitHubConfig({ token, owner, repo, branch });
+      showBackupToast('Configuração de backup guardada!', 'success');
+      updateBackupModalUI();
+    };
+
+    // Fazer backup imediato
+    document.getElementById('gh-backup-now-btn').onclick = async () => {
+      const token = document.getElementById('gh-token').value.trim();
+      const owner = document.getElementById('gh-owner').value.trim() || 'SamLuar';
+      const repo = document.getElementById('gh-repo').value.trim() || 'MyWipApp';
+      const branch = document.getElementById('gh-branch').value.trim() || 'feat/pwa4Android';
+      saveGitHubConfig({ token, owner, repo, branch });
+
+      if (!token) {
+        alert('Insira o seu Personal Access Token do GitHub para realizar o backup.');
+        return;
+      }
+      await performGitHubBackup({ token, owner, repo, branch });
+    };
+
+    // Exportar e Importar
+    document.getElementById('gh-export-btn').onclick = () => exportBackupJson();
+    document.getElementById('gh-import-btn').onclick = () => {
+      document.getElementById('gh-import-file').click();
+    };
+    document.getElementById('gh-import-file').onchange = (e) => {
+      if (e.target.files && e.target.files[0]) {
+        importBackupJson(e.target.files[0]);
+        e.target.value = '';
+      }
+    };
+  }
+
+  // Verificação periódica de 24 horas a cada 15 minutos em background
+  setInterval(() => {
+    checkAndTrigger24hBackup();
+  }, 15 * 60 * 1000);
+
+  // Verificação inicial
+  checkAndTrigger24hBackup();
+}
+
 // Inicialização segura do Service Worker no GitHub Pages
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -973,6 +1500,8 @@ if ('serviceWorker' in navigator) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  setupBackupUI();
+
   bindBackdropClose('detail-modal', closeDetail);
   bindBackdropClose('project-form-modal', () => { resetForm(); closeFormModal(); });
   bindBackdropClose('hour-modal', closeHourModal);
