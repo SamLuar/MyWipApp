@@ -247,6 +247,9 @@ function showDetails(p){
     <th style="text-align:center">Ação</th>
   </tr>`;
   hoursTable.appendChild(thead);
+
+  // Carregar horas
+  loadHoursDetail(p.id);
   
   const tbody = el('tbody');
   tbody.id = 'hours-tbody-detail';
@@ -265,9 +268,6 @@ function showDetails(p){
   hoursSection.appendChild(addHourBtn);
   
   body.appendChild(hoursSection);
-  
-  // Carregar horas
-  loadHoursDetail(p.id);
   
   // Armazenar projeto atual nos data attributes para os botões do header
   modal.dataset.projectId = p.id;
