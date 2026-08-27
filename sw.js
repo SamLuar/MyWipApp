@@ -47,7 +47,7 @@ self.addEventListener('fetch', (event) => {
 
         try {
           const cachedResponse = await caches.match('./data/projects.json');
-          const res = cachedResponse || await fetch('./data/projects.json');
+          const res = cachedResponse ? cachedResponse.clone() : await fetch(new URL('./data/projects.json', self.location.href));
           const projects = await res.json();
 
           const pathParts = url.pathname.split('/');
@@ -84,7 +84,7 @@ self.addEventListener('fetch', (event) => {
 
         try {
           const cachedResponse = await caches.match('./data/hours.json');
-          const res = cachedResponse || await fetch('./data/hours.json');
+          const res = cachedResponse ? cachedResponse.clone() : await fetch(new URL('./data/hours.json', self.location.href));
           const hours = await res.json();
           const projectHours = [];
 

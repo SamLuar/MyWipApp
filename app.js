@@ -18,37 +18,113 @@ const STATUS_LABELS = {
   'Cancelled': 'Cancelado'
 };
 
+const DEFAULT_PROJECTS = [
+  {
+    "id": "1786798792613",
+    "title": "DD6.029 Green Eyed Beauty",
+    "description": "Gato laranja de olhos verdes by DOTZ",
+    "category": "Diamond Painting",
+    "image": "https://eu.diamonddotz.com/image/cache/catalog/products/main/dd6/dd6.029-1600x1600.jpg",
+    "status": "Planned",
+    "startDate": null,
+    "endDate": null,
+    "numPoints": "11904",
+    "dimensionsCm": "27 x 35 cm",
+    "dimensionsPoints": "96 x 124",
+    "numColors": "31",
+    "acquisitionDate": null,
+    "completion": 0,
+    "costs": null,
+    "forSale": false
+  },
+  {
+    "id": "013",
+    "title": "DD6.029 Green Eyed Beauty",
+    "description": "Gato laranja de olhos verdes by DOTZ",
+    "category": "Patterns",
+    "image": "https://eu.diamonddotz.com/image/cache/catalog/products/main/dd6/dd6.029-1600x1600.jpg",
+    "status": "In Progress",
+    "startDate": "2026-08-10",
+    "endDate": null,
+    "numPoints": "11904",
+    "dimensionsCm": null,
+    "dimensionsPoints": "96 x 124",
+    "numColors": "31",
+    "acquisitionDate": null,
+    "completion": 25,
+    "costs": {
+      "materiais": 1,
+      "transporte": 0,
+      "moldura": 0,
+      "outros": 0
+    },
+    "forSale": false,
+    "notes": ""
+  }
+];
+
+const DEFAULT_HOURS = {
+  "Diamond Painting": {},
+  "Patterns": {
+    "013": [
+      {
+        "id": "1786799000000",
+        "date": "2026-08-10",
+        "startTime": "14:00",
+        "duration": 60,
+        "pointsDone": 2976,
+        "totalPoints": 2976,
+        "percentage": 25
+      }
+    ]
+  }
+};
+
 function el(tag, cls){
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   return e;
 }
 
-// Data helpers for local persistence and fallback
+// Resolução segura de URLs para GitHub Pages e localhost
+function getAppUrl(path) {
+  let href = window.location.href.split('#')[0].split('?')[0];
+  if (!href.endsWith('/')) {
+    if (href.substring(href.lastIndexOf('/')).includes('.')) {
+      href = href.substring(0, href.lastIndexOf('/') + 1);
+    } else {
+      href = href + '/';
+    }
+  }
+  const cleanPath = path.replace(/^\.?\//, '');
+  return new URL(cleanPath, href).href;
+}
+
+// Data helpers para persistência local e fallback
 async function loadInitialProjectsFromFile() {
   try {
-    const res = await fetch('./data/projects.json');
+    const res = await fetch(getAppUrl('data/projects.json'));
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data)) return data;
+      if (Array.isArray(data) && data.length > 0) return data;
     }
   } catch (e) {
-    console.warn('Could not load ./data/projects.json:', e);
+    console.warn('Could not load data/projects.json from network:', e);
   }
-  return [];
+  return DEFAULT_PROJECTS;
 }
 
 async function loadInitialHoursFromFile() {
   try {
-    const res = await fetch('./data/hours.json');
+    const res = await fetch(getAppUrl('data/hours.json'));
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data === 'object') return data;
     }
   } catch (e) {
-    console.warn('Could not load ./data/hours.json:', e);
+    console.warn('Could not load data/hours.json from network:', e);
   }
-  return {};
+  return DEFAULT_HOURS;
 }
 
 function getLocalProjects() {
@@ -94,30 +170,32 @@ function setLocalHours(hours) {
 }
 
 async function fetchProjects() {
-  // 1. Tentar API backend
-  try {
-    const res = await fetch(apiBase);
-    if (res.ok) {
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setLocalProjects(data);
-          return data;
-        }
-      }
-    }
-  } catch (err) {
-    console.info('API backend indisponível, a usar dados locais.');
-  }
-
-  // 2. Tentar localStorage
+  // 1. Tentar localStorage primeiro para resposta instantânea
   const localData = getLocalProjects();
-  if (localData !== null) {
+  if (localData !== null && localData.length > 0) {
     return localData;
   }
 
-  // 3. Fallback inicial para data/projects.json
+  // 2. Se for localhost/servidor node, tenta API
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    try {
+      const res = await fetch(apiBase);
+      if (res.ok) {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setLocalProjects(data);
+            return data;
+          }
+        }
+      }
+    } catch (err) {
+      console.info('API backend indisponível, a usar dados locais.');
+    }
+  }
+
+  // 3. Fallback inicial para data/projects.json ou defaults
   const fileData = await loadInitialProjectsFromFile();
   setLocalProjects(fileData);
   return fileData;
@@ -142,22 +220,24 @@ async function saveProject(data, id) {
   }
   setLocalProjects(projects);
 
-  try {
-    if (id) {
-      await fetch(`${apiBase}/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-    } else {
-      await fetch(apiBase, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    try {
+      if (id) {
+        await fetch(`${apiBase}/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+      } else {
+        await fetch(apiBase, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+      }
+    } catch (e) {
+      console.info('Sincronização com API ignorada.');
     }
-  } catch (e) {
-    console.info('Sincronização com a API ignorada (modo offline/standalone).');
   }
 }
 
@@ -166,10 +246,12 @@ async function removeProject(id) {
   projects = projects.filter(p => p.id !== id);
   setLocalProjects(projects);
 
-  try {
-    await fetch(`${apiBase}/${id}`, { method: 'DELETE' });
-  } catch (e) {
-    console.info('Eliminação na API ignorada (modo offline/standalone).');
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    try {
+      await fetch(`${apiBase}/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.info('Eliminação na API ignorada.');
+    }
   }
 
   if (currentCategory) navigateToCategory(currentCategory);
@@ -177,17 +259,24 @@ async function removeProject(id) {
 
 function showHome(){
   currentCategory = null;
-  document.getElementById('home').classList.remove('hidden');
-  document.getElementById('category-view').classList.add('hidden');
-  document.getElementById('main-nav').innerHTML = '';
+  const homeEl = document.getElementById('home');
+  const catViewEl = document.getElementById('category-view');
+  if (homeEl) homeEl.classList.remove('hidden');
+  if (catViewEl) catViewEl.classList.add('hidden');
+  const mainNav = document.getElementById('main-nav');
+  if (mainNav) mainNav.innerHTML = '';
 }
 
 function showCategoryView(category, projects){
   currentCategory = category;
-  document.getElementById('home').classList.add('hidden');
-  document.getElementById('category-view').classList.remove('hidden');
+  const homeEl = document.getElementById('home');
+  const catViewEl = document.getElementById('category-view');
+  if (homeEl) homeEl.classList.add('hidden');
+  if (catViewEl) catViewEl.classList.remove('hidden');
+
   const categoryTitle = document.getElementById('category-title');
   if (categoryTitle) categoryTitle.textContent = category;
+
   const banner = document.getElementById('category-banner');
   const bannerTitle = document.getElementById('category-banner-title');
   if (banner) {
@@ -197,12 +286,14 @@ function showCategoryView(category, projects){
   if (bannerTitle) {
     bannerTitle.textContent = category;
   }
+
   renderCategoryNav(category);
   renderAccordions(category, Array.isArray(projects) ? projects : []);
 }
 
 function renderCategoryNav(current){
   const nav = document.getElementById('category-nav');
+  if (!nav) return;
   nav.innerHTML = '';
   CATEGORIES.filter(c => c !== current).forEach(c => {
     const b = el('button');
@@ -213,9 +304,10 @@ function renderCategoryNav(current){
 }
 
 function renderAccordions(category, projects){
-  // Agrupar projetos por estado
+  const list = Array.isArray(projects) ? projects : [];
   const grouped = { 'Planned': [], 'In Progress': [], 'Done': [], 'Cancelled': [] };
-  (Array.isArray(projects) ? projects : []).filter(p => (p.category || '') === category).forEach(p => {
+  
+  list.filter(p => (p.category || '') === category).forEach(p => {
     const s = p.status || 'Planned';
     if (!grouped[s]) grouped[s] = [];
     grouped[s].push(p);
@@ -224,7 +316,7 @@ function renderAccordions(category, projects){
   const populatedStatuses = Object.keys(grouped).filter(status => grouped[status].length > 0);
   const defaultExpandedStatus = grouped['In Progress'].length > 0
     ? 'In Progress'
-    : populatedStatuses[0] || null;
+    : (populatedStatuses[0] || 'Planned');
 
   Object.keys(grouped).forEach(status => {
     const id = 'status-' + status.replace(/\s+/g,'-');
@@ -247,7 +339,7 @@ function renderAccordions(category, projects){
     const btn = accordion.querySelector('.accordion-toggle');
     const count = grouped[status].length;
     const statusLabel = STATUS_LABELS[status] || status;
-    const isExpanded = grouped[status].length > 0 && status === defaultExpandedStatus;
+    const isExpanded = status === defaultExpandedStatus;
     accordion.classList.toggle('collapsed', !isExpanded);
     const icon = isExpanded ? '▼' : '▶';
     btn.innerHTML = `<span class="accordion-count">(${count})</span> ${statusLabel} <span class="accordion-icon">${icon}</span>`;
@@ -255,7 +347,8 @@ function renderAccordions(category, projects){
 
   // Configurar toggles dos accordions
   document.querySelectorAll('.accordion-toggle').forEach(btn => {
-    btn.onclick = () => {
+    btn.onclick = (e) => {
+      e.preventDefault();
       const accordion = btn.parentElement;
       accordion.classList.toggle('collapsed');
       const isCollapsed = accordion.classList.contains('collapsed');
@@ -485,24 +578,24 @@ function closeHourModal() {
 }
 
 async function getHoursForProject(projectId) {
-  // 1. Tentar API
-  try {
-    const res = await fetch(`${hoursApiBase}/${projectId}`);
-    if (res.ok) {
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        return await res.json();
-      }
-    }
-  } catch (e) {
-    console.info('Hours API indisponível, a usar dados locais.');
-  }
-
-  // 2. Tentar localStorage ou data/hours.json
+  // 1. Tentar localStorage ou data/hours.json
   let allHours = getLocalHours();
   if (!allHours) {
     allHours = await loadInitialHoursFromFile();
     setLocalHours(allHours);
+  }
+
+  // 2. Se for localhost/servidor node, tenta API
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    try {
+      const res = await fetch(`${hoursApiBase}/${projectId}`);
+      if (res.ok) {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          return await res.json();
+        }
+      }
+    } catch (e) {}
   }
 
   const projectHours = [];
@@ -571,17 +664,18 @@ async function saveHourEntry({ projectId, category, date, startTime, duration, p
     }
   }
 
-  // Tentar sincronização com API
-  try {
-    const url = hourId ? `${hoursApiBase}/${projectId}/${hourId}` : hoursApiBase;
-    const method = hourId ? 'PUT' : 'POST';
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId, category, date, startTime, duration, pointsDone })
-    });
-  } catch (e) {
-    console.info('Registo de horas na API ignorado (modo offline/standalone).');
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    try {
+      const url = hourId ? `${hoursApiBase}/${projectId}/${hourId}` : hoursApiBase;
+      const method = hourId ? 'PUT' : 'POST';
+      await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, category, date, startTime, duration, pointsDone })
+      });
+    } catch (e) {
+      console.info('Registo de horas na API ignorado.');
+    }
   }
 }
 
@@ -625,10 +719,12 @@ async function deleteHourEntry(projectId, hourId) {
     }
   }
 
-  try {
-    await fetch(`${hoursApiBase}/${projectId}/${hourId}`, { method: 'DELETE' });
-  } catch (e) {
-    console.info('Eliminação de hora na API ignorada (modo offline/standalone).');
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    try {
+      await fetch(`${hoursApiBase}/${projectId}/${hourId}`, { method: 'DELETE' });
+    } catch (e) {
+      console.info('Eliminação de hora na API ignorada.');
+    }
   }
 }
 
@@ -803,6 +899,15 @@ function applyTheme(theme) {
   localStorage.setItem('wip-theme', theme);
 }
 
+// Inicialização segura do Service Worker no GitHub Pages
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(getAppUrl('sw.js')).catch((err) => {
+      console.warn('Service Worker registration note:', err);
+    });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   bindBackdropClose('detail-modal', closeDetail);
   bindBackdropClose('project-form-modal', () => { resetForm(); closeFormModal(); });
@@ -817,7 +922,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Cliques nos cartões da página inicial
   document.querySelectorAll('.cards .card').forEach(card => {
-    card.onclick = () => navigateToCategory(card.dataset.category);
+    card.onclick = () => {
+      const category = card.dataset.category;
+      if (category) navigateToCategory(category);
+    };
   });
 
   document.getElementById('back-home').onclick = () => showHome();
