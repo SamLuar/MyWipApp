@@ -291,14 +291,78 @@ function showCategoryView(category, projects){
   renderAccordions(category, Array.isArray(projects) ? projects : []);
 }
 
+function ensureCategoryNavStyles() {
+  if (document.getElementById('category-nav-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'category-nav-styles';
+  style.textContent = `
+    .category-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .category-nav button {
+      padding: 6px 14px;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #24292f;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: all 0.15s ease;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+    .category-nav button:hover:not(.active) {
+      background: #f3f4f6;
+      border-color: #cbd5e1;
+    }
+    .category-nav button.active {
+      background: #0064c8 !important;
+      color: #ffffff !important;
+      border-color: #004b96 !important;
+      font-weight: 700;
+      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.3);
+      cursor: default;
+      transform: translateY(1px);
+    }
+    body.dark-mode .category-nav button {
+      background: #1d2735;
+      color: #e8edf5;
+      border-color: #3a485d;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+    body.dark-mode .category-nav button:hover:not(.active) {
+      background: #243041;
+      border-color: #4f637f;
+    }
+    body.dark-mode .category-nav button.active {
+      background: #0064c8 !important;
+      color: #ffffff !important;
+      border-color: #8ab4ff !important;
+      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 function renderCategoryNav(current){
+  ensureCategoryNavStyles();
   const nav = document.getElementById('category-nav');
   if (!nav) return;
   nav.innerHTML = '';
-  CATEGORIES.filter(c => c !== current).forEach(c => {
-    const b = el('button');
+  CATEGORIES.forEach(c => {
+    const isCurrent = (c === current);
+    const b = el('button', isCurrent ? 'category-nav-btn active' : 'category-nav-btn');
     b.textContent = c;
-    b.onclick = () => navigateToCategory(c);
+    if (isCurrent) {
+      b.setAttribute('aria-current', 'page');
+      b.setAttribute('aria-pressed', 'true');
+    } else {
+      b.onclick = () => navigateToCategory(c);
+    }
     nav.appendChild(b);
   });
 }
