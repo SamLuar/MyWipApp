@@ -1,4 +1,4 @@
-const apiBase = './data/projects.json';
+const apiBase = '/api/projects';
 let currentCategory = null;
 
 const CATEGORIES = ['Ponto Cruz','Diamond Painting','Patterns','Outros'];
