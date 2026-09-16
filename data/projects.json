@@ -421,5 +421,30 @@
     "forSale": false,
     "id": "1787871722767",
     "hourLog": []
+  },
+  {
+    "title": "Bunny in the Cup",
+    "description": "Coelhinho dentro de chávena de chá. Bom para fralda de bebê.",
+    "notes": "",
+    "category": "Ponto Cruz",
+    "image": null,
+    "status": "In Progress",
+    "numPoints": "2366",
+    "dimensionsCm": null,
+    "dimensionsPoints": "76 x 55",
+    "numColors": "15",
+    "acquisitionDate": null,
+    "startDate": "2025-11-10",
+    "endDate": null,
+    "completion": 0,
+    "costs": {
+      "materiais": 0,
+      "transporte": 0,
+      "moldura": 0,
+      "outros": 0
+    },
+    "forSale": false,
+    "id": "1789532092058",
+    "hourLog": []
   }
 ]
