@@ -427,7 +427,7 @@
     "description": "Coelhinho dentro de chávena de chá. Bom para fralda de bebê.",
     "notes": "",
     "category": "Ponto Cruz",
-    "image": null,
+    "image": "https://i.etsystatic.com/16664171/r/il/3aa8a0/8031580811/il_fullxfull.8031580811_rb94.jpg",
     "status": "In Progress",
     "numPoints": "2366",
     "dimensionsCm": null,
@@ -436,7 +436,7 @@
     "acquisitionDate": null,
     "startDate": "2025-11-10",
     "endDate": null,
-    "completion": 0,
+    "completion": 86,
     "costs": {
       "materiais": 0,
       "transporte": 0,
