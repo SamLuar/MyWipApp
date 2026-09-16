@@ -20,5 +20,18 @@
         "percentage": 25
       }
     ]
+  },
+  "Ponto Cruz": {
+    "1789532092058": [
+      {
+        "id": "1789532193057",
+        "date": "2026-09-13",
+        "startTime": "16:59",
+        "duration": 240,
+        "pointsDone": 2023,
+        "totalPoints": 2023,
+        "percentage": 86
+      }
+    ]
   }
 }
