@@ -446,5 +446,30 @@
     "forSale": false,
     "id": "1789532092058",
     "hourLog": []
+  },
+  {
+    "title": "Ancient Library Nook Book",
+    "description": "",
+    "notes": "",
+    "category": "Outros",
+    "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQDT_gb8ldufigkaKK5q-6RxvTfdI7TZCiGt5dr1oHkQwu24sXsX12qxdWB&s=10",
+    "status": "In Progress",
+    "numPoints": null,
+    "dimensionsCm": null,
+    "dimensionsPoints": null,
+    "numColors": null,
+    "acquisitionDate": "2025-08-06",
+    "startDate": "2025-08-10",
+    "endDate": null,
+    "completion": 75,
+    "costs": {
+      "materiais": 0,
+      "transporte": 0,
+      "moldura": 0,
+      "outros": 0
+    },
+    "forSale": false,
+    "id": "1789532422285",
+    "hourLog": []
   }
 ]
